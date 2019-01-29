@@ -12,8 +12,9 @@
   "author": "dddw001",
   "license": "ISC",
   "dependencies": {
-    "node": "^10.14.0",
+    "body-parser": "^1.18.3",
     "express": "^4.16.4",
-    "express3-handlebars": "^0.5.2"
+    "express3-handlebars": "^0.5.2",
+    "node": "^10.14.0"
   }
 }
