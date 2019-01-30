@@ -4,6 +4,9 @@ var weather = require('./lib/weather.js')
 var formidable = require('formidable')
 var credentials = require('./lib/credentials')
 
+// var emailService = require('./lib/email.js')(credentials)
+// emailService.send('2398516225@qq.com', 'Hi', 'Hello World')
+
 var app = express()
 app.set('x-powered-by', false)
 
@@ -50,6 +53,11 @@ app.get('/', function(req, res){
   // res.type('text/plain')
   // res.send('Meadowlark Travel')
   res.render('home')
+  // throw new Error('失败')
+})
+// 如果不传递err, 由下一个普通中间件处理；如果传递err, 传递给下一个错误处理中间件
+app.use('/', function(err, req, res, next){
+  next()
 })
 
 // about页
@@ -165,7 +173,7 @@ app.use(function(req, res){
   res.render('404')
 })
 
-//505页面
+//500页面
 app.use(function(err, req, res, next){
   console.error(err.stack)
   res.status(500)
