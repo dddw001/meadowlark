@@ -88,6 +88,8 @@ Vacation.find(function(err, vacations){
     notes: 'The tour guide is currently recovering from a skiing accident.'
   }).save()
 })
+
+// 发送邮件
 // var emailService = require('./lib/email.js')(credentials)
 // emailService.send('2398516225@qq.com', 'Hi', 'Hello World')
 
@@ -112,10 +114,10 @@ app.set('view engine', 'hbs')
 app.use(express.static(__dirname + '/public'))
 
 app.use(require('body-parser').urlencoded({extended: false}))
-
 app.use(require('cookie-parser')(credentials.cookieSecret))
 app.use(require('express-session')())
 
+// 设置locals数据
 app.use((req, res, next) => {
   if (!res.locals.partials) {
     res.locals.partials = {}
@@ -128,37 +130,7 @@ app.use((req, res, next) => {
   next()
 })
 
-// 首页
-app.get('/', function(req, res){
-  // res.type('text/plain')
-  // res.send('Meadowlark Travel')
-  res.render('home')
-  // throw new Error('失败')
-})
-// 如果不传递err, 由下一个普通中间件处理；如果传递err, 传递给下一个错误处理中间件
-app.use('/', function(err, req, res, next){
-  next()
-})
-
-// about页
-app.get('/about', function(req, res){
-  res.render('about', {fortune: fortune.getFortune()})
-})
-
-// 先渲染视图，再渲染布局
-app.get('/foo', (req, res) => {
-  res.render('foo', {layout: null})
-})
-
-app.get('/jquery-test', (req, res) => {
-  res.render('jquery-test')
-})
-
-// 在视图中使用hbs jquery 渲染页面
-app.get('/nursery-rhyme', (req, res) => {
-  res.render('nursery-rhyme')
-})
-
+// ajax请求
 app.get('/data/nursery-rhyme', (req, res) => {
   res.json({
     animal: 'squirrel',
@@ -169,9 +141,6 @@ app.get('/data/nursery-rhyme', (req, res) => {
 })
 
 // 提交表单
-app.get('/news-letter', function(req, res){
-  res.render('news-letter', {csrf: 'CSRF token goes here'})
-})
 app.post('/process', function(req, res){
   console.log('Form (from querystring): ' + req.query.form)
   console.log('CSRF token (from hidden form field): ' + req.body._csrf)
@@ -179,23 +148,14 @@ app.post('/process', function(req, res){
   console.log('Email (from visible form field): ' + req.body.email)
   res.redirect(303, '/thank')
 })
-app.get('/thank', function(req, res){
-  res.send('Thank You')
-})
 
 // ajax处理表单
-app.get('/news-letter-ajax', function(req, res){
-  res.render('news-letter-ajax', {csrf: 'CSRF token goes here'})
-})
-
 function NewsletterSignup(){
 }
 NewsletterSignup.prototype.save = function(cb){
 	cb()
 }
-
 var VALID_EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/
-
 app.post('/process2', function(req, res){
   var name = req.body.name || ''
   var email = req.body.email || ''
@@ -228,13 +188,6 @@ app.post('/process2', function(req, res){
 })
 
 // 上传文件
-app.get('/contest/vacation-photo',function(req,res){
-  var now = new Date()
-  res.render('contest/vacation-photo',{
-    year: now.getFullYear(),
-    month: now.getMonth()
-  })
-})
 app.post('/contest/vacation-photo/:year/:month', function(req, res){
   var form = new formidable.IncomingForm()
   form.parse(req, function(err, fields, files){
@@ -247,28 +200,7 @@ app.post('/contest/vacation-photo/:year/:month', function(req, res){
   })
 })
 
-// 查找数据
-// app.get('/vacations', function(req, res){
-//   Vacation.find({ available: true }, function(err, vacations){
-//     var context = {
-//       vacations: vacations.map(function(vacation){
-//         return {
-//           sku: vacation.sku,
-//           name: vacation.name,
-//           description: vacation.description,
-//           price: vacation.getDisplayPrice(),
-//           inSeason: vacation.inSeason
-//         }
-//       })
-//     }
-//     res.render('vacations', context)
-//   })
-// })
-
 // 插入数据
-app.get('/notify-me-when-in-season', function(req, res){
-  res.render('notify-me-when-in-season', { sku: req.query.sku })
-})
 app.post('/notify-me-when-in-season', function(req, res){
   VacationInSeasonListener.updateOne(
     { email: req.body.email },
@@ -295,7 +227,10 @@ app.post('/notify-me-when-in-season', function(req, res){
 })
 
 // mongodb存储session
-app.get('/set-currency/:currency', function(req,res){
+app.get('/set-currency/:currency', (req, res) => {
+  if (!req.session) {
+    req.session = {}
+  }
   req.session.currency = req.params.currency
   return res.redirect(303, '/vacations')
 })
@@ -333,6 +268,27 @@ app.get('/vacations', function (req, res) {
     }
     res.render('vacations', context)
   })
+})
+
+// 路由
+const routers = require('./routers/index.js')(app)
+
+// 自动化渲染 添加.hbs视图就有了对应的路由
+let autoViews = {}
+const fs = require('fs')
+app.use(function(req,res,next){
+  const path = req.path.toLowerCase()
+  // 检查缓存；如果它在那里，渲染这个视图
+  if (autoViews[path]) {
+    return res.render(autoViews[path])
+  }
+  // 如果它不在缓存里，那就看看有没有 .hbs 文件能匹配
+  if (fs.existsSync(__dirname + '/views' + path + '.hbs')) {
+    autoViews[path] = path.replace(/^\//, '')
+    return res.render(autoViews[path])
+  }
+  // 没发现视图；转到 404 处理器
+  next()
 })
 
 // 404页面
