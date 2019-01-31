@@ -13,12 +13,16 @@
   "license": "ISC",
   "dependencies": {
     "body-parser": "^1.18.3",
+    "connect": "^3.6.6",
+    "connect-mongo": "^2.0.3",
     "cookie-parser": "^1.4.3",
     "express": "^4.16.4",
     "express-session": "^1.15.6",
     "express3-handlebars": "^0.5.2",
     "formidable": "^1.2.1",
+    "mongoose": "^5.4.7",
     "node": "^10.14.0",
-    "nodemailer": "^5.1.1"
+    "nodemailer": "^5.1.1",
+    "session-mongoose": "^0.5.2"
   }
 }

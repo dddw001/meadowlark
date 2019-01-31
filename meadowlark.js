@@ -3,14 +3,94 @@ var fortune = require('./lib/fortune.js')
 var weather = require('./lib/weather.js')
 var formidable = require('formidable')
 var credentials = require('./lib/credentials')
+var mongoose = require('mongoose')
+var Vacation = require('./models/vacation.js')
+var VacationInSeasonListener = require('./models/vacationInSeasonListener.js')
 
-// var emailService = require('./lib/email.js')(credentials)
-// emailService.send('2398516225@qq.com', 'Hi', 'Hello World')
+var session = require('express-session')
+var MongoSessionStore = require('connect-mongo')(session)
 
 var app = express()
 app.set('x-powered-by', false)
-
 app.set('port', process.env.PORT || 3000)
+
+switch (app.get('env')) {
+  case 'development':
+    mongoose.connect(credentials.mongo.development.connectionString)
+    break
+  case 'production':
+    mongoose.connect(credentials.mongo.production.connectionString)
+    break
+  default:
+    throw new Error('Unknown execution environment:' + app.get('env'))
+}
+var db = mongoose.connection
+db.on('open', function(err){
+  if (err) {
+    console.log('数据库连接失败')
+    throw err
+  }
+  console.log('数据库连接成功')
+})
+
+var sessionStore = new MongoSessionStore({
+  mongooseConnection: db,
+  ttl: 7*24*60*60
+})
+app.use(session({
+  resave: true,
+  saveUninitialized: true,
+  secret: credentials.cookieSecret,
+  store: sessionStore
+}))
+
+Vacation.find(function(err, vacations){
+  if(vacations.length) return
+  new Vacation({
+    name: 'Hood River Day Trip',
+    slug: 'hood-river-day-trip',
+    category: 'Day Trip',
+    sku: 'HR199',
+    description: 'Spend a day sailing on the Columbia and ' + 'enjoying craft beers in Hood River!',
+    priceInCents: 9995,
+    tags: ['day trip', 'hood river', 'sailing', 'windsurfing', 'breweries'],
+    inSeason: true,
+    maximumGuests: 16,
+    available: true,
+    packagesSold: 0
+  }).save()
+  new Vacation({
+    name: 'Oregon Coast Getaway',
+    slug: 'oregon-coast-getaway',
+    category: 'Weekend Getaway',
+    sku: 'OC39',
+    description: 'Enjoy the ocean air and quaint coastal towns!',
+    priceInCents: 269995,
+    tags: ['weekend getaway', 'oregon coast', 'beachcombing'],
+    inSeason: false,
+    maximumGuests: 8,
+    available: true,
+    packagesSold: 0
+  }).save()
+  new Vacation({
+    name: 'Rock Climbing in Bend',
+    slug: 'rock-climbing-in-bend',
+    category: 'Adventure',
+    sku: 'B99',
+    description: 'Experience the thrill of climbing in the high desert.',
+    priceInCents: 289995,
+    tags: ['weekend getaway', 'bend', 'high desert', 'rock climbing'],
+    inSeason: true,
+    requiresWaiver: true,
+    maximumGuests: 4,
+    available: false,
+    packagesSold: 0,
+    notes: 'The tour guide is currently recovering from a skiing accident.'
+  }).save()
+})
+// var emailService = require('./lib/email.js')(credentials)
+// emailService.send('2398516225@qq.com', 'Hi', 'Hello World')
+
 // 设置模板引擎
 var handlebars = require('express3-handlebars').create({
   defaultLayout: 'main',
@@ -164,6 +244,94 @@ app.post('/contest/vacation-photo/:year/:month', function(req, res){
     console.log('received files:')
     console.log(files)
     res.redirect(303, '/thank')
+  })
+})
+
+// 查找数据
+// app.get('/vacations', function(req, res){
+//   Vacation.find({ available: true }, function(err, vacations){
+//     var context = {
+//       vacations: vacations.map(function(vacation){
+//         return {
+//           sku: vacation.sku,
+//           name: vacation.name,
+//           description: vacation.description,
+//           price: vacation.getDisplayPrice(),
+//           inSeason: vacation.inSeason
+//         }
+//       })
+//     }
+//     res.render('vacations', context)
+//   })
+// })
+
+// 插入数据
+app.get('/notify-me-when-in-season', function(req, res){
+  res.render('notify-me-when-in-season', { sku: req.query.sku })
+})
+app.post('/notify-me-when-in-season', function(req, res){
+  VacationInSeasonListener.updateOne(
+    { email: req.body.email },
+    { $push: { skus: req.body.sku } },
+    { upsert: true },
+    function(err){
+      if(err) {
+        console.error(err.stack)
+        req.session.flash = {
+          type: 'danger',
+          intro: 'Ooops!',
+          message: 'There was an error processing your request.'
+        }
+        return res.redirect(303, '/vacations')
+      }
+      req.session.flash = {
+        type: 'success',
+        intro: 'Thank you!',
+        message: 'You will be notified when this vacation is in season.'
+      }
+      return res.redirect(303, '/vacations')
+    }
+  )
+})
+
+// mongodb存储session
+app.get('/set-currency/:currency', function(req,res){
+  req.session.currency = req.params.currency
+  return res.redirect(303, '/vacations')
+})
+function convertFromUSD(value, currency){
+  switch (currency) {
+    case 'USD': return value * 1
+    case 'GBP': return value * 0.6
+    case 'BTC': return value * 0.0023707918444761
+    default: return NaN
+  }
+}
+app.get('/vacations', function (req, res) {
+  Vacation.find({ available: true }, function (err, vacations) {
+    var currency = req.session.currency || 'USD'
+    var context = {
+      currency: currency,
+      vacations: vacations.map(function (vacation) {
+                  return {
+                    sku: vacation.sku,
+                    name: vacation.name,
+                    description: vacation.description,
+                    inSeason: vacation.inSeason,
+                    price: convertFromUSD(vacation.priceInCents/100, currency),
+                    qty: vacation.qty,
+                  }
+                })
+    }
+    switch (currency) {
+      case 'USD': context.currencyUSD = 'selected'
+                  break
+      case 'GBP': context.currencyGBP = 'selected'
+                  break
+      case 'BTC': context.currencyBTC = 'selected'
+                  break
+    }
+    res.render('vacations', context)
   })
 })
 
