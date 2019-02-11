@@ -104,6 +104,9 @@ var handlebars = require('express3-handlebars').create({
       }
       this._sections[name] = options.fn(this)
       return null
+    },
+    static: function (name) {
+      return require('./lib/static.js').map(name)
     }
   }
 })
