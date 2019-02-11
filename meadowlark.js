@@ -273,59 +273,8 @@ app.get('/vacations', function (req, res) {
   })
 })
 
-// 景点的增删改查
-var Attraction = require('./models/attraction.js')
-app.get('/api/attractions', function (req, res) {
-  Attraction.find({ approved: true }, function(err, attractions){
-    if (err) {
-      return res.send(500, 'Error occurred: database error.')
-    }
-    res.json(attractions.map(function (a) {
-      return {
-        name: a.name,
-        id: a._id,
-        description: a.description,
-        location: a.location
-      }
-    }))
-  })
-})
-app.post('/api/attraction', function (req, res) {
-  var a = new Attraction({
-    name: req.body.name,
-    description: req.body.description,
-    location: { lat: req.body.lat, lng: req.body.lng },
-    history: {
-      event: 'created',
-      email: req.body.email,
-      date: new Date()
-    },
-    approved: false
-  })
-  a.save(function (err, a) {
-    if (err) {
-      return res.send(500, 'Error occurred: database error.')
-    }
-    res.json({ id: a._id })
-  })
-})
-app.get('/api/attraction/:id', function (req,res) {
-  Attraction.findById(req.params.id, function (err, a) {
-    if (err) {
-      return res.send(500, 'Error occurred: database error.')
-    }
-    res.json({
-      name: a.name,
-      id: a._id,
-      description: a.description,
-      location: a.location
-    })
-  })
-})
-
 // 路由
 const routers = require('./routers/index.js')(app)
-
 // 自动化渲染 添加.hbs视图就有了对应的路由
 let autoViews = {}
 const fs = require('fs')
@@ -342,6 +291,65 @@ app.use(function(req,res,next){
   }
   // 没发现视图；转到 404 处理器
   next()
+})
+
+var Rest = require('connect-rest')
+var connect = require('connect')
+var bodyParser = require('body-parser')
+var connectApp = connect().use(bodyParser.urlencoded({extended: true}))
+  .use(bodyParser.json())
+var options = {
+  context: '/api',
+  domain: require('domain').create()
+}
+var rest = Rest.create(options)
+connectApp.use(rest.processRequest())
+// 景点的增删改查
+var Attraction = require('./models/attraction.js')
+rest.get('/attractions', function (req, content, cb) {
+  Attraction.find({ approved: true }, function (err, attractions) {
+    if (err) {
+      return cb({ error: 'Internal error.' })
+    }
+    cb(null, attractions.map(function (a) {
+      return {
+        name: a.name,
+        description: a.description,
+        location: a.location
+      }
+    }))
+  })
+})
+rest.post('/attraction', function (req, content, cb) {
+  var a = new Attraction({
+    name: req.body.name,
+    description: req.body.description,
+    location: { lat: req.body.lat, lng: req.body.lng },
+    history: {
+      event: 'created',
+      email: req.body.email,
+      date: new Date()
+    },
+    approved: false
+  })
+  a.save(function (err, a) {
+    if (err) {
+      return cb({ error: 'Unable to add attraction.' })
+    }
+    cb(null, { id: a._id })
+  })
+})
+rest.get('/attraction/:id', function(req, content, cb){
+  Attraction.findById(req.params.id, function(err, a){
+    if (err) {
+      return cb({ error: 'Unable to retrieve attraction.' })
+    }
+    cb(null, {
+      name: attraction.name,
+      description: attraction.description,
+      location: attraction.location
+    })
+  })
 })
 
 // 404页面
