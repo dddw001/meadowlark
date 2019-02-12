@@ -1,7 +1,8 @@
 <h1>Welcome to Meadowlark Travel</h1>
 
 <form action="/process" method="POST">
-  <input type="hidden" name="hush" val="hidden, but not secret!">
+  <input type="hidden" name="hush" value="hidden, but not secret!">
+  <input type="hidden" name="_csrf" value="{{_csrfToken}}">
   <div>
     <label for="fieldColor">Your favorite color: </label>
     <input type="text" id="fieldColor" name="color">

@@ -1,6 +1,7 @@
 <div>
   <form role="form" action="/notify-me-when-in-season" method="POST">
     <input type="hidden" name="sku" value="{{sku}}">
+    <input type="hidden" name="_csrf" value="{{_csrfToken}}">
     <div>
       <label for="fieldEmail">Email</label>
       <input type="email" required id="fieldName" name="email">

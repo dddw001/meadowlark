@@ -120,6 +120,15 @@ app.use(require('body-parser').urlencoded({extended: false}))
 app.use(require('cookie-parser')(credentials.cookieSecret))
 app.use(require('express-session')())
 
+var connectSession = require('connect-session')
+// 这个必须放在 cookie-parser 和 connect-session 的引入之后
+// csurf中间件防止CSRF(跨站请求伪造)
+app.use(require('csurf')())
+app.use(function(req, res, next){
+  res.locals._csrfToken = req.csrfToken()
+  next()
+})
+
 // 以api开头的API可跨域
 app.use('/api', require('cors')())
 
