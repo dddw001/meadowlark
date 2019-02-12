@@ -145,6 +145,76 @@ app.use((req, res, next) => {
   next()
 })
 
+var User = require('./models/user.js')
+var passport = require('passport')
+var qqStrategy = require('passport-qq').Strategy
+app.use(passport.initialize())
+app.use(passport.session())
+
+passport.use(new qqStrategy({
+   //  clientID和clientSecret需在QQ开发平台获取
+    clientID: 1,
+    clientSecret: 2,
+    callbackURL: "http://127.0.0.1:3000/auth/qq/callback"
+  },
+  function(username, password, done) {
+    User.findOne({ name: name }, function(err, user) {
+      if (err) {
+        return done(err)
+      }
+      if (!user) {
+        return done(null, false, { message: '用户名不存在.' })
+      }
+      if (!user.validPassword(password)) {
+        return done(null, false, { message: '密码不匹配.' })
+      }
+      return done(null, user)
+    })
+  }
+))
+
+app.get('/auth/qq',
+  passport.authenticate('qq'),
+  function(req, res){
+    // The request will be redirected to qq for authentication, so this
+    // function will not be called.
+  }
+)
+app.get('/auth/qq/callback', 
+  passport.authenticate('qq', { failureRedirect: '/login' }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect('/')
+  }
+)
+
+// 访问需要登录的页面，如果未经过第三方授权登录跳转到'/unauthorized'
+app.get('/account', function(req, res){
+  if(!req.session.passport.user) {
+    return res.redirect(303, '/unauthorized')
+  }
+  res.render('account')
+})
+
+function customerOnly(req, res){
+  var user = req.session.passport.user
+  if(user && req.role==='customer') return next()
+  res.redirect(303, '/unauthorized')
+}
+function employeeOnly(req, res, next){
+  var user = req.session.passport.user
+  if(user && req.role==='employee') return next()
+  next('route')
+}
+// 只允许客户访问的路由
+app.get('/account/order-history',customerOnly,function(req, res){
+  res.render('account/order-history');
+})
+// 只允许员工访问的路由
+app.get('/sales', employeeOnly, function(req, res){
+  res.render('sales')
+})
+
 // ajax请求
 app.get('/data/nursery-rhyme', (req, res) => {
   res.json({
